@@ -47,15 +47,31 @@ export const GithubAccountsSchema = z.object({
   cli: z.string().trim().default(''),
 })
 export const FeishuBotSchema = z.object({ cli: z.string().trim().default('') })
+/** Connection of the Matrix Source; resolved here so its reply and context adapters reach the homeserver without a CLI. */
+export const MatrixBotSchema = z.object({
+  homeserver: z.string().trim().regex(/^(https?:\/\/\S+)?$/, 'http(s) URL').default(''),
+  accessToken: z.string().trim().default(''),
+  userId: z.string().trim().regex(/^(@[A-Za-z0-9._=/-]+:[A-Za-z0-9.-]+(:[0-9]+)?)?$/, '@user:server').default(''),
+})
 /** Source configuration keys that affect deployment setup and trigger a restart when changed. */
-export const SETUP_FIELDS: Readonly<Record<string, readonly string[]>> = { github: Object.keys(GithubAccountsSchema.shape), feishu: Object.keys(FeishuBotSchema.shape) }
+export const SETUP_FIELDS: Readonly<Record<string, readonly string[]>> = { github: Object.keys(GithubAccountsSchema.shape), feishu: Object.keys(FeishuBotSchema.shape), matrix: Object.keys(MatrixBotSchema.shape) }
 
 export interface Deployment extends Machine {
   repository: string
   github: { cli: string; login: string; noreply: string }
   feishu?: FeishuBot
+  matrix?: MatrixBot
 }
 export interface FeishuBot { cli: string; appId: string; brand: 'feishu' | 'lark'; botId: string; name: string }
+export interface MatrixBot { homeserver: string; accessToken: string; userId: string }
+/**
+ * Returns the Matrix connection once the Source names its homeserver, token and user; a half-configured Source stays
+ * off instead of failing setup, because the Source reports its own connection health.
+ */
+export function resolveMatrix(matrix: unknown): MatrixBot | undefined {
+  const { homeserver, accessToken, userId } = MatrixBotSchema.parse(matrix ?? {})
+  return homeserver && accessToken && userId ? { homeserver, accessToken, userId } : undefined
+}
 
 /** Resolve a command name or absolute path to an executable file, ignoring the worker shim directory. */
 export function executable(name: string, path: string, exclude?: string): string {
